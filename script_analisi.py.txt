@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+import os
+
+#clinical cases and disease type
+
+cases = {"case622": "AR", "case717": "AD", "case644": "AD", "case625": "AD", "case743": "AD"}
+
+#path
+base_dir = "/home/BCG2025_fragomeniM/genomics2025_exam"
+genome_index = "/home/BCG2025_genomics_exam/uni"
+reference_fasta = "/home/BCG2025_genomics_exam/universe.fasta"
+bed_file = "/home/BCG2025_genomics_exam/exons16Padded_sorted.bed"
+
+# for loop for each case and move to the correct folder already created
+for case, mode in cases.items():
+    case_dir = os.path.join(base_dir, case)
+    os.chdir(case_dir)
+
+    
+
+    #FASTQ alignment, convertion to BAMB and index creation
+    for person in ["father", "mother", "child"]:
+        fq = f"{case}_{person}.fq.gz"
+        bam = f"{case}_{person}.bam"
+        os.system(f"bowtie2 -U {fq} -x {genome_index} --rg-id '{person}' --rg 'SM:{person}' | samtools view -Sb | samtools sort -o {bam}")
+        os.system(f"samtools index {bam}")
+
+    #Variant calling with freebayes to create VCF file
+    vcf = f"{case}.vcf"
+    os.system(f"freebayes -f {reference_fasta} -m 20 -C 5 -Q 10 --min-coverage 10 {case}_child.bam {case}_father.bam {case}_mother.bam > {vcf}")
+
+    #alphabetical sorting of patients 
+    os.system(f"bcftools query -l {vcf} | sort > {case}.samples.txt")
+    os.system(f"bcftools view -S {case}.samples.txt {vcf} > {case}.sorted.vcf")
+
+    #Filtering genetic candidates by inheritance type
+    filtered_vcf = f"{case}_candilist.vcf"
+    os.system(f"grep '^#' {case}.sorted.vcf > {filtered_vcf}")
+    if mode == "AR":
+        os.system(f"grep '1/1.*0/1.*0/1' {case}.sorted.vcf >> {filtered_vcf}")  #AR cases
+    elif mode == "AD":
+        os.system(f"grep '0/1.*0/0.*0/0' {case}.sorted.vcf >> {filtered_vcf}")  #AD cases
+
+    #Additional filtering to retain only variants in target regions
+    final_vcf = f"{case}_candilistTG.vcf"
+    os.system(f"grep '^#' {filtered_vcf} > {final_vcf}")
+    os.system(f"bedtools intersect -a {filtered_vcf} -b {bed_file} -u >> {final_vcf}")
+
+    #fastQC analysis
+    os.makedirs(f"fastqc_reports", exist_ok=True)  # Crea cartella fastqc_reports per il caso
+    for person in ["father", "mother", "child"]:
+        fq = f"{case}_{person}.fq.gz"
+        os.system(f"fastqc {fq} -o fastqc_reports")
+
+    #Qualimap analysis
+    os.makedirs(f"qualimap_reports", exist_ok=True)  # Crea cartella qualimap_reports per il caso
+    for person in ["father", "mother", "child"]:
+        bam = f"{case}_{person}.bam"
+        outdir = f"qualimap_reports/{case}_{person}" 
+        os.system(f"qualimap bamqc -bam {bam} -gff /home/BCG2025_genomics_exam/exons16Padded_sorted.bed -outdir {outdir}")  # Salva i report in quella cartella
+
+    #MultiQC
+    os.system(f"multiqc ./ -o ./ -n multiqc_report_{case}.html")  # Salva il report di MultiQC nella cartella del caso
+
+    #Coverage tracks generation
+    for person in ["father", "mother", "child"]:
+        bam = f"{case}_{person}.bam"
+        output_cov = f"{person}Cov.bg"
+        os.system(f"bedtools genomecov -ibam {bam} -bg -trackline -trackopts 'name=\"{person}\"' -max 100 > {output_cov}")
+
+    
