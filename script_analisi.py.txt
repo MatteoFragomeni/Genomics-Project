@@ -47,20 +47,20 @@ for case, mode in cases.items():
     os.system(f"bedtools intersect -a {filtered_vcf} -b {bed_file} -u >> {final_vcf}")
 
     #fastQC analysis
-    os.makedirs(f"fastqc_reports", exist_ok=True)  # Crea cartella fastqc_reports per il caso
+    os.makedirs(f"fastqc_reports", exist_ok=True)  
     for person in ["father", "mother", "child"]:
         fq = f"{case}_{person}.fq.gz"
         os.system(f"fastqc {fq} -o fastqc_reports")
 
     #Qualimap analysis
-    os.makedirs(f"qualimap_reports", exist_ok=True)  # Crea cartella qualimap_reports per il caso
+    os.makedirs(f"qualimap_reports", exist_ok=True)  
     for person in ["father", "mother", "child"]:
         bam = f"{case}_{person}.bam"
         outdir = f"qualimap_reports/{case}_{person}" 
-        os.system(f"qualimap bamqc -bam {bam} -gff /home/BCG2025_genomics_exam/exons16Padded_sorted.bed -outdir {outdir}")  # Salva i report in quella cartella
+        os.system(f"qualimap bamqc -bam {bam} -gff /home/BCG2025_genomics_exam/exons16Padded_sorted.bed -outdir {outdir}")  
 
     #MultiQC
-    os.system(f"multiqc ./ -o ./ -n multiqc_report_{case}.html")  # Salva il report di MultiQC nella cartella del caso
+    os.system(f"multiqc ./ -o ./ -n multiqc_report_{case}.html")  
 
     #Coverage tracks generation
     for person in ["father", "mother", "child"]:
